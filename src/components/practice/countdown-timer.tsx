@@ -1,0 +1,107 @@
+"use client";
+
+import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
+
+interface CountdownTimerProps {
+  timeLeft: number;
+  totalTime: number;
+  progress: number;
+  isRunning: boolean;
+}
+
+function formatTime(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+}
+
+function getTimerColor(progress: number, timeLeft: number) {
+  if (timeLeft <= 10) return "text-[#EF6A6A]";
+  if (progress > 0.75) return "text-[#EF6A6A]";
+  if (progress > 0.5) return "text-[#F5B942]";
+  return "text-primary";
+}
+
+function getStrokeColor(progress: number, timeLeft: number) {
+  if (timeLeft <= 10) return "#EF6A6A";
+  if (progress > 0.75) return "#EF6A6A";
+  if (progress > 0.5) return "#F5B942";
+  return "#4D86F7";
+}
+
+export function CountdownTimer({
+  timeLeft,
+  progress,
+  isRunning,
+}: CountdownTimerProps) {
+  const circumference = 2 * Math.PI * 120;
+  const strokeDashoffset = circumference * (1 - progress);
+  const timerColor = getTimerColor(progress, timeLeft);
+  const strokeColor = getStrokeColor(progress, timeLeft);
+  const isFlashing = timeLeft <= 10 && timeLeft > 0 && isRunning;
+
+  return (
+    <div
+      role="timer"
+      aria-label={`${formatTime(timeLeft)} remaining`}
+      aria-live="polite"
+      className="relative flex items-center justify-center"
+    >
+      {/* SVG Ring */}
+      <svg
+        className="h-64 w-64 -rotate-90 sm:h-72 sm:w-72"
+        viewBox="0 0 260 260"
+      >
+        {/* Background ring */}
+        <circle
+          cx="130"
+          cy="130"
+          r="120"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="6"
+          className="text-outline-variant/20"
+        />
+        {/* Progress ring */}
+        <motion.circle
+          cx="130"
+          cy="130"
+          r="120"
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          initial={false}
+          animate={{ strokeDashoffset }}
+          transition={{ duration: 0.5, ease: "linear" }}
+        />
+      </svg>
+
+      {/* Time display */}
+      <motion.div
+        className={cn(
+          "absolute text-6xl font-bold tabular-nums tracking-tight sm:text-7xl",
+          timerColor
+        )}
+        animate={
+          isFlashing
+            ? { opacity: [1, 0.3, 1] }
+            : isRunning
+              ? { scale: [1, 1.02, 1] }
+              : {}
+        }
+        transition={
+          isFlashing
+            ? { duration: 1, repeat: Infinity }
+            : { duration: 1, repeat: Infinity, ease: "easeInOut" }
+        }
+      >
+        {formatTime(timeLeft)}
+      </motion.div>
+
+    </div>
+  );
+}

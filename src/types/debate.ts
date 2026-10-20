@@ -1,0 +1,63 @@
+import type { DebateScore, PracticeTrack } from "./feedback";
+
+export interface DebateTopic {
+  id: string;
+  title: string;
+  category: string;
+  difficulty: "beginner" | "intermediate" | "advanced";
+  context?: string;
+  suggestedPoints?: {
+    proposition: string[];
+    opposition: string[];
+  };
+}
+
+export type AiDifficulty = "easy" | "medium" | "hard";
+export type { PracticeTrack } from "./feedback";
+
+export type AiHighlightType = "claim" | "evidence" | "impact" | "assumption";
+
+export interface AiHighlight {
+  type: AiHighlightType;
+  quote: string;
+  note?: string;
+}
+
+export interface DebateRound {
+  roundNumber: number;
+  type: "user-speech" | "ai-rebuttal";
+  label: string;
+  transcript?: string;
+  aiResponse?: string;
+  aiHighlights?: AiHighlight[];
+  duration?: number;
+}
+
+export interface ClubPracticeContext {
+  clubId?: string;
+  classId?: string;
+  assignmentId?: string;
+  assignmentTitle?: string;
+}
+
+export interface DebateSession {
+  id: string;
+  date: string;
+  topic: DebateTopic;
+  side: "proposition" | "opposition";
+  practiceTrack: PracticeTrack;
+  mode: "quick" | "full";
+  prepTime: number;
+  speechTime: number;
+  transcript: string;
+  feedback: DebateScore | null;
+  duration: number;
+  prepNotes?: string;
+  clubContext?: ClubPracticeContext;
+  modelName?: string | null;
+  // Full Round fields
+  aiDifficulty?: AiDifficulty;
+  rounds?: DebateRound[];
+}
+
+export type { DebateScore } from "./feedback";

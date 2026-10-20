@@ -1,0 +1,351 @@
+"use client";
+
+import { useState } from "react";
+import { Link } from "@/i18n/navigation";
+import { usePathname, useRouter } from "@/i18n/navigation";
+import { useTranslations } from "next-intl";
+import {
+  BarChart3,
+  LayoutDashboard,
+  MessageCircle,
+  Clock,
+  Settings,
+  LogOut,
+  User,
+  ChevronLeft,
+  Lock,
+  Menu,
+  Shield,
+  Scale,
+  Swords,
+} from "lucide-react";
+import { OrbBalance } from "@/components/shared/orb-balance";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetTrigger,
+  SheetContent,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import posthog from "posthog-js";
+import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
+import type { Profile } from "@/types/database";
+import { DashboardSidebarRail } from "@/components/dashboard/dashboard-sidebar-rail";
+import type { DashboardNavItem } from "@/lib/api/dashboard";
+import { REFERRAL_REWARD_CREDITS } from "@/lib/referrals/constants";
+
+const NAV_ITEMS = [
+  { href: "/dashboard", key: "dashboard", icon: LayoutDashboard },
+  { href: "/practice", key: "practice", icon: Scale },
+  { href: "/debates", key: "duel", icon: Swords },
+  { href: "/chat", key: "chat", icon: MessageCircle },
+  { href: "/history", key: "history", icon: Clock },
+  { href: "/profile", key: "analytics", icon: BarChart3 },
+] as const;
+
+interface SidebarProps {
+  profile: Profile | null;
+  userEmail: string | null;
+}
+
+function NavContent({
+  collapsed,
+  profile,
+  userEmail,
+  onSignOut,
+  onNavClick,
+}: {
+  collapsed: boolean;
+  profile: SidebarProps["profile"];
+  userEmail: SidebarProps["userEmail"];
+  onSignOut: () => void;
+  onNavClick?: () => void;
+}) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const t = useTranslations('dashboard.nav');
+  const tc = useTranslations('common');
+  const ts = useTranslations('dashboard.home');
+  const isAdmin = profile?.role === "admin";
+  const displayName =
+    profile?.display_name || userEmail?.split("@")[0] || "User";
+  const initials = displayName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* Logo */}
+      <div
+        className={cn(
+          "flex h-16 shrink-0 items-center border-b border-outline-variant/10 px-4",
+          collapsed ? "justify-center" : "gap-2"
+        )}
+      >
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-on-primary text-sm font-extrabold">
+          D
+        </div>
+        {!collapsed && (
+          <span className="text-lg font-extrabold text-on-surface tracking-tight">
+            DebateLab
+          </span>
+        )}
+      </div>
+
+      {/* Credit Balance */}
+      {profile?.orb_balance !== undefined && (
+        <div
+          className={cn(
+            "mx-3 mt-3 flex items-center gap-2 rounded-xl border border-[#F5B942]/20 bg-[#FFF8E8] px-3 py-2",
+            collapsed && "justify-center px-2"
+          )}
+        >
+          <OrbBalance balance={profile.orb_balance} size="sm" />
+          {!collapsed && (
+            <span className="text-xs text-on-surface-variant">Credits</span>
+          )}
+        </div>
+      )}
+
+      {/* Nav Links */}
+      <nav className="flex-1 space-y-1 px-3 py-4">
+        {NAV_ITEMS.map((item) => {
+          const isActive =
+            pathname === item.href ||
+            (item.key === "duel"
+              ? pathname.startsWith("/debates")
+              : item.href !== "/dashboard" && pathname.startsWith(item.href));
+          const Icon = item.icon;
+          const label = t(item.key);
+          const isUnavailable = item.key === "duel" && !isAdmin;
+          const content = (
+            <>
+              <Icon className="h-5 w-5 shrink-0" />
+              {!collapsed && (
+                <>
+                  <span>{label}</span>
+                  {isUnavailable ? (
+                    <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-surface-container px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-on-surface-variant">
+                      <Lock className="h-3 w-3" />
+                      {ts("coming_soon")}
+                    </span>
+                  ) : null}
+                </>
+              )}
+            </>
+          );
+
+          if (isUnavailable) {
+            return (
+              <div
+                key={item.href}
+                aria-disabled="true"
+                className={cn(
+                  "flex min-h-[44px] cursor-not-allowed items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-on-surface-variant/65 opacity-75",
+                  collapsed && "justify-center px-0"
+                )}
+                title={collapsed ? `${label} - ${ts("coming_soon")}` : undefined}
+              >
+                {content}
+              </div>
+            );
+          }
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={onNavClick}
+              className={cn(
+                "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all min-h-[44px]",
+                collapsed && "justify-center px-0",
+                isActive
+                  ? "bg-primary/10 text-primary shadow-[inset_0_0_0_1px_rgba(77,134,247,0.12)]"
+                  : "text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+              )}
+              title={collapsed ? label : undefined}
+            >
+              {content}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* User section */}
+      <div className="shrink-0 border-t border-outline-variant/10 p-3">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className={cn(
+              "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-surface-container",
+              collapsed && "justify-center px-0"
+            )}
+          >
+            <Avatar size="sm">
+              {profile?.avatar_url && (
+                <AvatarImage src={profile.avatar_url} alt={displayName} />
+              )}
+              <AvatarFallback className="bg-primary-container text-on-primary-container text-xs font-bold">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            {!collapsed && (
+              <div className="min-w-0 flex-1 text-left">
+                <p className="truncate text-sm font-medium text-on-surface">
+                  {displayName}
+                </p>
+                <p className="truncate text-xs text-on-surface-variant">
+                  {profile?.role ?? ts("student")}
+                </p>
+              </div>
+            )}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" sideOffset={8}>
+            <DropdownMenuItem onClick={() => { onNavClick?.(); router.push('/profile'); }}>
+              <User className="h-4 w-4" />
+              {t('profile')}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => { onNavClick?.(); router.push('/settings'); }}>
+              <Settings className="h-4 w-4" />
+              {t('settings')}
+            </DropdownMenuItem>
+            {profile?.role === 'admin' && (
+              <DropdownMenuItem onClick={() => { onNavClick?.(); router.push('/dashboard/admin'); }}>
+                <Shield className="h-4 w-4" />
+                {t('switchToAdmin')}
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onClick={onSignOut}>
+              <LogOut className="h-4 w-4" />
+              {tc('sign_out')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  );
+}
+
+export function Sidebar({ profile, userEmail }: SidebarProps) {
+  const [collapsed, setCollapsed] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  const tc = useTranslations('common');
+  const useDashboardRail = !pathname.startsWith("/dashboard/admin");
+  const isAdmin = profile?.role === "admin";
+  const dashboardNavItems: DashboardNavItem[] = [
+    { key: "dashboard", href: "/dashboard", status: "live" },
+    { key: "practice", href: "/practice", status: "live" },
+    {
+      key: "duel",
+      href: isAdmin ? "/debates" : undefined,
+      status: isAdmin ? "live" : "coming-soon",
+    },
+    {
+      key: "courses",
+      href: "/courses",
+      status: "live",
+    },
+    { key: "coach", href: "/chat?context=coach-home", status: "live" },
+    { key: "history", href: "/history", status: "live" },
+    { key: "analytics", href: "/profile", status: "live" },
+  ];
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    posthog.reset();
+    router.push("/");
+    router.refresh();
+  };
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      {useDashboardRail ? (
+        <DashboardSidebarRail
+          navItems={dashboardNavItems}
+          referralCode={profile?.referral_code ?? null}
+          inviteReward={REFERRAL_REWARD_CREDITS}
+          isAdmin={isAdmin}
+        />
+      ) : (
+        <aside
+          className={cn(
+            "hidden md:flex flex-col h-screen sticky top-0 border-r border-outline-variant/10 bg-surface-container-lowest transition-all duration-200",
+            collapsed ? "w-16" : "w-60"
+          )}
+        >
+          <NavContent
+            collapsed={collapsed}
+            profile={profile}
+            userEmail={userEmail}
+            onSignOut={handleSignOut}
+          />
+          {/* Collapse toggle */}
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="absolute -right-3 top-20 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-outline-variant/20 bg-surface-container-lowest text-on-surface-variant shadow-sm transition-colors hover:bg-surface-container"
+          >
+            <ChevronLeft
+              className={cn(
+                "h-3.5 w-3.5 transition-transform",
+                collapsed && "rotate-180"
+              )}
+            />
+          </button>
+        </aside>
+      )}
+
+      {/* Mobile top bar + sheet */}
+      <div className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-outline-variant/10 bg-surface-container-lowest/80 backdrop-blur-xl px-4 md:hidden">
+        <Sheet>
+          <SheetTrigger className="flex h-11 w-11 items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container">
+            <Menu className="h-5 w-5" />
+          </SheetTrigger>
+          <SheetContent side="left" className="w-64 p-0" showCloseButton={false}>
+            <SheetTitle className="sr-only">{tc('navigation')}</SheetTitle>
+            <NavContent
+              collapsed={false}
+              profile={profile}
+              userEmail={userEmail}
+              onSignOut={handleSignOut}
+              onNavClick={() => {
+                // Sheet auto-closes when navigation happens via link click
+              }}
+            />
+          </SheetContent>
+        </Sheet>
+        <span className="text-lg font-extrabold text-primary tracking-tight">
+          DebateLab
+        </span>
+        <div className="ml-auto">
+          <Avatar size="sm">
+            {profile?.avatar_url && (
+              <AvatarImage src={profile.avatar_url} alt="User" />
+            )}
+            <AvatarFallback className="bg-primary-container text-on-primary-container text-xs font-bold">
+              {(profile?.display_name || userEmail || "U")
+                .split(" ")
+                .map((n) => n[0])
+                .join("")
+                .slice(0, 2)
+                .toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+        </div>
+      </div>
+    </>
+  );
+}
